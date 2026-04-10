@@ -110,27 +110,34 @@ class TestTransactionService:
 
     def test_get_purpose_of_remittance_choices_success(self):
         http = self._mock_http()
+        data = [
+            {"id": 1, "purpose": "FAMILY_SUPPORT"},
+            {"id": 2, "purpose": "EDUCATION"},
+        ]
         http.get_purpose_of_remittance.return_value = {
             "status": "success",
-            "data": [
-                {"purpose": "FAMILY_SUPPORT"},
-                {"purpose": "EDUCATION"},
-            ],
+            "data": data,
         }
         svc = TransactionService(http)
         choices = svc.get_purpose_of_remittance_choices()
-        values = [v for v, _ in choices]
-        assert "FAMILY_SUPPORT" in values
-        assert "EDUCATION" in values
+        assert choices == data
 
-    def test_get_purpose_choices_falls_back_on_error(self):
+    def test_get_purpose_choices_falls_back_when_response_is_none(self):
         http = self._mock_http()
         http.get_purpose_of_remittance.return_value = None
         svc = TransactionService(http)
         choices = svc.get_purpose_of_remittance_choices()
-        # Should return fallback list
         assert len(choices) > 0
-        assert any(v == "FAMILY_SUPPORT" for v, _ in choices)
+        assert all("id" in item and "purpose" in item for item in choices)
+        assert any(item["purpose"] == "FAMILY_SUPPORT" for item in choices)
+
+    def test_get_purpose_choices_falls_back_on_unexpected_structure(self):
+        http = self._mock_http()
+        http.get_purpose_of_remittance.return_value = {"status": "error"}
+        svc = TransactionService(http)
+        choices = svc.get_purpose_of_remittance_choices()
+        assert len(choices) == 5
+        assert choices[0] == {"id": 1, "purpose": "FAMILY_SUPPORT"}
 
     def test_get_document_type_choices_success(self):
         http = self._mock_http()
@@ -159,6 +166,72 @@ class TestTransactionService:
         result = svc.confirm_transaction("tx-001")
         assert result["status"] == "CONFIRMED"
 
+    def test_get_document_type_choices_returns_empty_on_exception(self):
+        http = self._mock_http()
+        http.get_transaction_document_types.side_effect = ValueError("API down")
+        svc = TransactionService(http)
+        assert svc.get_document_type_choices() == []
+
+    def test_create_quotation_returns_none_on_failure(self):
+        http = self._mock_http()
+        http.create_transaction_quotation.return_value = None
+        svc = TransactionService(http)
+        assert svc.create_quotation("payer1", "B2B", "500.00", "USD") is None
+
+    def test_create_transaction_returns_data(self):
+        http = self._mock_http()
+        http.create_transaction.return_value = {"data": {"id": "tx-001", "status": "CREATED"}}
+        svc = TransactionService(http)
+        result = svc.create_transaction({"payer_id": "p1", "quotation_id": "q1"})
+        assert result == {"id": "tx-001", "status": "CREATED"}
+        http.create_transaction.assert_called_once_with({"payer_id": "p1", "quotation_id": "q1"})
+
+    def test_create_transaction_returns_none_on_failure(self):
+        http = self._mock_http()
+        http.create_transaction.return_value = None
+        svc = TransactionService(http)
+        assert svc.create_transaction({}) is None
+
+    def test_upload_document_returns_data(self):
+        http = self._mock_http()
+        http.upload_transaction_document.return_value = {"data": {"document_id": "doc-1"}}
+        svc = TransactionService(http)
+        mock_file = MagicMock()
+        result = svc.upload_document("tx-001", "INVOICE", mock_file, "invoice.pdf")
+        assert result == {"document_id": "doc-1"}
+        http.upload_transaction_document.assert_called_once_with(
+            transaction_id="tx-001",
+            document_type="INVOICE",
+            file=mock_file,
+            file_name="invoice.pdf",
+        )
+
+    def test_upload_document_without_file_name(self):
+        http = self._mock_http()
+        http.upload_transaction_document.return_value = {"data": {"document_id": "doc-2"}}
+        svc = TransactionService(http)
+        mock_file = MagicMock()
+        result = svc.upload_document("tx-002", "PASSPORT", mock_file)
+        assert result == {"document_id": "doc-2"}
+        http.upload_transaction_document.assert_called_once_with(
+            transaction_id="tx-002",
+            document_type="PASSPORT",
+            file=mock_file,
+            file_name=None,
+        )
+
+    def test_upload_document_returns_none_on_failure(self):
+        http = self._mock_http()
+        http.upload_transaction_document.return_value = None
+        svc = TransactionService(http)
+        assert svc.upload_document("tx-003", "INVOICE", MagicMock()) is None
+
+    def test_confirm_transaction_returns_none_on_failure(self):
+        http = self._mock_http()
+        http.confirm_transaction.return_value = None
+        svc = TransactionService(http)
+        assert svc.confirm_transaction("tx-001") is None
+
     def test_build_b2b_credit_party_identifier(self):
         b2b_config = {
             "required_receiving_entity_fields": [
@@ -181,6 +254,32 @@ class TestTransactionService:
         assert result["receiving_business"]["country_iso_code"] == "NGA"
         assert result["credit_party_identifier"]["bank_account_number"] == "0123456789"
         assert result["credit_party_identifier"]["swift_bic_code"] == "TESTBICX"
+
+    def test_build_b2b_account_type_is_uppercased(self):
+        b2b_config = {
+            "required_receiving_entity_fields": [],
+            "credit_party_identifiers_accepted": [["account_type"]],
+        }
+        beneficiary_data = {"account_type": "savings"}
+        result = TransactionService.build_b2b_credit_party_identifier(
+            beneficiary_data, b2b_config
+        )
+        assert result["credit_party_identifier"]["account_type"] == "SAVINGS"
+
+    def test_build_b2c_payload_uses_firstname_lastname_when_provided(self):
+        beneficiary_data = {
+            "firstname": "Jane",
+            "lastname": "Doe",
+            "business_name": "Should Not Appear",
+            "country_iso3": "GBR",
+            "address": "",
+            "postal_code": "",
+            "city": "",
+            "state_province_region": "",
+        }
+        result = TransactionService.build_b2c_payload(beneficiary_data)
+        assert result["beneficiary"]["firstname"] == "Jane"
+        assert result["beneficiary"]["lastname"] == "Doe"
 
     def test_build_b2c_payload(self):
         beneficiary_data = {

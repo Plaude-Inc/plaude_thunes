@@ -23,12 +23,7 @@ logger = logging.getLogger(__name__)
 
 #: Fallback purpose-of-remittance choices used when the API is unavailable.
 FALLBACK_PURPOSE_CHOICES: List[Tuple[str, str]] = [
-    ("", "Select purpose of payment"),
-    ("FAMILY_SUPPORT", "Family Support"),
-    ("EDUCATION", "Education"),
-    ("MEDICAL_TREATMENT", "Medical Treatment"),
-    ("BUSINESS_PAYMENT", "Business Payment"),
-    ("OTHER", "Other"),
+    "FAMILY_SUPPORT", "EDUCATION", "MEDICAL_TREATMENT", "BUSINESS_PAYMENT", "OTHER"
 ]
 
 
@@ -67,20 +62,17 @@ class TransactionService:
         try:
             response = self._http.get_purpose_of_remittance()
             if response and response.get("status") == "success" and "data" in response:
-                choices = [("", "Select purpose of payment")]
-                for item in response["data"]:
-                    purpose = item.get("purpose")
-                    if purpose:
-                        choices.append((purpose, purpose.replace("_", " ").title()))
-                return choices
-
+                return response["data"]
             logger.warning(
                 "Thunes API returned unexpected structure for purpose of remittance"
             )
         except (KeyError, TypeError, ValueError) as exc:
             logger.error("Error fetching purpose of remittance from Thunes: %s", exc)
 
-        return FALLBACK_PURPOSE_CHOICES
+        return [
+            {"id": i+1, "purpose": value}
+            for i, value in enumerate(FALLBACK_PURPOSE_CHOICES)
+        ]
 
     def get_document_type_choices(self) -> List[Tuple[str, str]]:
         """
