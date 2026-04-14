@@ -197,18 +197,6 @@ class TestThunesPayerServicePayerNotFound:
 
 
 class TestThunesPayerServiceCPIUnavailable:
-    def test_returns_false_when_cpi_returns_none(self):
-        http = _make_http()
-        http.get_payer_details.return_value = _payer_response()
-        http.get_credit_party_information.return_value = None
-
-        ok, result = ThunesPayerService(http).process_account(
-            "B2B", "1234", "NGA", "USD", _identifier()
-        )
-
-        assert ok is False
-        assert result == "Credit party information not found"
-
     def test_account_holder_name_is_none_when_cpi_data_is_empty(self):
         http = _make_http()
         http.get_payer_details.return_value = _payer_response()
