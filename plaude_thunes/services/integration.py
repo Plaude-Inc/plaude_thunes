@@ -101,7 +101,6 @@ class ThunesPayerService:
             bank_account_holder_name = entity_data.get("bank_account_holder_name")
         else:
             logger.warning("Credit party info lookup failed for %s", payer_id)
-            return False, "Credit party information not found"
 
         return True, {
             "bank_name": bank_name,
