@@ -294,9 +294,9 @@ class TestGetPurposeOfRemittanceView:
 class TestGetDocumentTypesView:
     def test_returns_200_with_document_types(self):
         client = _make_client()
-        client.transactions.get_document_type_choices.return_value = [
-            ("INVOICE", "Invoice"),
-            ("PROOF_OF_ADDRESS", "Proof Of Address"),
+        client.transactions.get_document_types.return_value = [
+            {"value": "INVOICE", "label": "Invoice"},
+            {"value": "PROOF_OF_ADDRESS", "label": "Proof Of Address"},
         ]
 
         request = factory.get("/thunes/document-types/")
@@ -311,8 +311,8 @@ class TestGetDocumentTypesView:
 
     def test_response_includes_label(self):
         client = _make_client()
-        client.transactions.get_document_type_choices.return_value = [
-            ("INVOICE", "Invoice"),
+        client.transactions.get_document_types.return_value = [
+            {"value": "INVOICE", "label": "Invoice"},
         ]
 
         request = factory.get("/thunes/document-types/")

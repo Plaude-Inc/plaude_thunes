@@ -51,13 +51,13 @@ class GetDocumentTypesView(BaseThunesAPIView):
 
     def get(self, request, *args, **kwargs):
         client = self.get_thunes_client()
-        choices = client.transactions.get_document_type_choices()
-        data = [{"value": v, "label": label} for v, label in choices]
+        choices = client.transactions.get_document_types()
+        
         return JsonResponse(
             {
                 "status": "success",
                 "message": "Document types retrieved",
-                "data": data,
+                "data": choices,
             },
             status=status.HTTP_200_OK,
         )
