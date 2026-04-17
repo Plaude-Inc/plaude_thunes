@@ -93,6 +93,20 @@ class TransactionService:
             logger.error("Error fetching document types from Thunes: %s", exc)
 
         return []
+    
+    def get_document_types(self) -> List[str]:
+        """
+        Fetch supported transaction document types and return as a list of strings.
+
+        Returns:
+            List of document type strings, or [] on error.
+        """
+        try:
+            return self._http.get_transaction_document_types()
+        except (KeyError, TypeError, ValueError) as exc:
+            logger.error("Error fetching document types from Thunes: %s", exc)
+
+        return []
 
     # ------------------------------------------------------------------
     # Transaction lifecycle
